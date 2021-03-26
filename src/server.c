@@ -569,13 +569,11 @@ void *render(void *v) {
             */
 
             MAB_WRAP("rendering tiles"){
-                /*
                 mabLogMessage("left", "%d", (int)rx);
                 mabLogMessage("top", "%d", (int)ry);
                 mabLogMessage("numTilesX", "%d", numTilesX);
                 mabLogMessage("numTilesY", "%d", numTilesY);
                 mabLogMessage("zoom", "%d", (int)_z);
-                */
 		        for(i=0; i<numTilesX; ++i){
 		    	    for(j=0; j<numTilesY; ++j){
 		    		    unsigned long idx = (ry+j)*_max_res+(rx+i);
@@ -586,12 +584,10 @@ void *render(void *v) {
 
 		    	    	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _partition_cache[idx].indexBuffer);
                         MAB_WRAP("glDrawElements") {
-                            /*
                             printf("index: %lu\n", idx);
                             printf("size:  %lu\n", pd->partitions.length);
                             mabLogMessage("index", "%lu", idx);
                             mabLogMessage("size", "%lu", pd->partitions.length);
-                            */
                             glDrawElements(GL_LINES, pd->partitions.length, GL_UNSIGNED_INT, 0);
                         }
 		    	    	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -688,6 +684,33 @@ tojpeg(void *rgba, int resolution, void **jpg, size_t *jpgsize) {
 
 	return jpglen;
 }
+
+
+size_t
+topng(void *rgba, int resolution, void **png, size_t *pngsize) {
+	size_t pnglen;
+
+	mabLogMessage("resolution", "%d", resolution);
+	mabLogMessage("rgba", "%p", rgba);
+
+        *pngsize = 1024;
+        *png = malloc(*pngsize);
+        pnglen = 0;
+
+        void mywriter(void *context, void *data, int size) {
+                if (pnglen + size > *pngsize) {
+                        *pngsize = pnglen + size;
+                        *png = realloc(*png, *pngsize);
+                }
+                memcpy(*png + pnglen, data, size);
+                pnglen += size;
+        }
+
+	(void)stbi_write_png_to_func(mywriter, NULL, resolution, resolution, 4, rgba, 0);
+
+	return pnglen;
+}
+
 
 struct MHD_Response *
 MAB_create_response_from_file(const char *filename) {
@@ -905,10 +928,10 @@ ANSWER(Tile) {
 			goto end;
 
 		} else {
-			MAB_WRAP("jpeg") {
+			MAB_WRAP("png") {
 				output = NULL;
 				outputlen = 0;
-				tojpeg(_image, _resolution, &output, &outputlen);
+				topng(_image, _resolution, &output, &outputlen);
 			}
 
 			// tell render thread we're done
@@ -927,7 +950,7 @@ ANSWER(Tile) {
 	if (origin != NULL) {
 		MHD_add_response_header(response, "Access-Control-Allow-Origin", origin);
 	}
-	MHD_add_response_header(response, "Content-Type", "image/jpeg");
+	MHD_add_response_header(response, "Content-Type", "image/png");
 	MHD_add_response_header(response, "Connection", "close");
 	
 	rc = MHD_queue_response(conn, MHD_HTTP_OK, response);
